@@ -4,13 +4,13 @@ import scala.util.Try
 
 object DigitalOceanClusterSetup extends App {
   val options = Map(
-    "destroyOnly" -> "Will only remove existing droplets, DNS records and exit.",
+    "destroy" -> "Will only remove existing droplets, DNS records and exit.",
     "help" -> "This message"
   )
 
   val cnf = ConfigFactory.parseFile(new java.io.File("config"))
   val baseDomain =       cnf.getString("baseDomain")
-  val thirdLevelDomain = Try(cnf.getString("thirdLevelDomain")).getOrElse("")
+  val nodeSuffix =       cnf.getString("nodeSuffix")
   val defaultMemory =    cnf.getInt("memory")
   val defaultImage =     cnf.getString("image")
   val defaultRegion =    cnf.getString("region")
@@ -29,56 +29,18 @@ object DigitalOceanClusterSetup extends App {
       println("  " + kv._2)
     }
   } else if (!args.isEmpty) {
-    if (args.contains("destroyOnly"))
-      destroyDroplets()
+    if (args.contains("destroy")) {
+      destroyDroplets(confirmation = false)
+      removeOldDnsEntries()
+    }
   } else {
     println("""---------------------------------------------""")
     println("""Run `sbt "run help"` to see available options""")
     println("""---------------------------------------------""")
-    destroyDroplets()
-    while (!api.droplets.exists(_.droplets.filter(_.currentSite).isEmpty)) {
-      Log.print("Not all droplets that belong to current site destroyed. Sleep for 10 seconds.")
-      Thread.sleep(10000)
-    }
+    destroyDroplets(confirmation = true)
     createDroplets(nodeList)
-
-
-
-
-
-
-
-
-
-
-
-
-//  val dom = Json.fromJson(Json.parse(api.getDomains))(domainListFormat).get.domains.find(_.name == baseDomain)
-//
-//  def removeOldDnsEntries() {
-//    dom.map { domain =>
-//      Json.fromJson(Json.parse(api.getDomainRecords(domain.id)))(domainRecordListFormat).get.records
-//        .filter(_.isEligibleForRemove).map { record =>
-//          println("Will destroy domain record " + domain.id + ", " + record.id)
-//          api.destroyDomainRecord(domain.id, record.id)
-//        }
-//    }
-//  }
-//  removeOldDnsEntries()
-//  
-//  def addNewDnsEntries() {
-//    val droplets = Json.fromJson(Json.parse(api.getDroplets))(dropletListFormat).get.droplets
-//    dom.map { domain =>
-//      DropletKind.kinds.map { kind =>
-//        (1 to kind.count).map { n =>
-//          val dnsName = getDropletNameShort(kind, n)
-//          println("Will add domain record for " + dnsName)
-//          api.createDomainRecord(domain.id, "A", droplets.find(_.name == getDropletName(kind, n)).get.ip_address.get, dnsName)
-//        }
-//      }
-//    }
-//  }
-//  addNewDnsEntries()
+    removeOldDnsEntries()
+    addNewDnsEntries()
 //
 //
 //
@@ -166,12 +128,21 @@ object DigitalOceanClusterSetup extends App {
 
   }
 
-  def destroyDroplets() = {
+  def getDropletName(node: Node) = getDropletNameShort(node) + baseDomain
+  def getDropletNameShort(node: Node) = "node-" + node.name + nodeSuffix
+
+  def destroyDroplets(confirmation: Boolean) = {
     Log.print("Starting to destroy all related droplets.")
     api.droplets.map(_.droplets.filter(_.currentSite).map { dropletToDestroy =>
       val res = api.destroyDroplet(dropletToDestroy.id)
       Log.print("Started destroying " + dropletToDestroy.name + ". Result is " + res + ".")
     })
+    if (confirmation) {
+      while (!api.droplets.exists(_.droplets.filter(_.currentSite).isEmpty)) {
+        Log.print("Not all droplets that belong to current site destroyed. Sleep for 10 seconds.")
+        Thread.sleep(10000)
+      }
+    }
   }
 
   def createDroplets(nodes: List[Node]) {
@@ -198,8 +169,31 @@ object DigitalOceanClusterSetup extends App {
 
     def allDropletsAreUpAndHasIp =
       api.droplets.map(_.droplets.filter(_.currentSite).count(_.isUpAndHasIp)).exists(_ == nodeList.length)
-
-    def getDropletName(node: Node) = getDropletNameShort(node) + baseDomain
-    def getDropletNameShort(node: Node) = "node-" + node.name + thirdLevelDomain
   }
+
+  def removeOldDnsEntries() {
+    api.domains.map(_.domains.map { domain =>
+      api.domainRecords(domain.id).map(_.records.filter(_.isEligibleForRemove).map { record =>
+        val res = api.destroyDomainRecord(domain.id, record.id)
+        Log.print("Destroyed domain record " + record.data + " for domain " + domain.name + ". Result is " + res + ".")
+      })
+    })
+  }
+
+  def addNewDnsEntries() {
+    val droplets = api.droplets.map(_.droplets).get
+    api.domains.map(_.domains.find(dm => baseDomain.endsWith(dm.name)).map { domain =>
+      nodeList.map { node =>
+        val dnsName = getDropletNameShort(node)
+        Log.print("Will add domain record for " + dnsName)
+        droplets.find(_.name == getDropletName(node)).map { droplet =>
+          api.createDomainRecord(domain.id, "A", droplet.ip_address.get, dnsName)
+        }.orElse {
+          Log.print("No droplet found for this domain name. Doing nothing.")
+          None
+        }
+      }
+    })
+  }
+
 }

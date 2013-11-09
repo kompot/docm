@@ -2,7 +2,7 @@ case class Node(name: String, roles: List[String])
 
 case class Droplet(id: Int, name: String, image_id: Int, size_id: Int, region_id: Int, backups_active: Boolean,
                    ip_address: Option[String], locked: Boolean, status: String) {
-  val currentSite = name.endsWith(s"${DigitalOceanClusterSetup.thirdLevelDomain}${DigitalOceanClusterSetup.baseDomain}")
+  val currentSite = name.endsWith(DigitalOceanClusterSetup.nodeSuffix + DigitalOceanClusterSetup.baseDomain)
   // ip check can be probably skipped
   val isUpAndHasIp = status.toLowerCase == "active" && ip_address.isDefined
 }
@@ -14,7 +14,7 @@ case class Domain(id: Int, name: String)
 case class DomainList(status: String, domains: List[Domain])
 
 case class DomainRecord(id: Int, domain_id: Int, record_type: String, name: Option[String], data: String) {
-//  def isEligibleForRemove: Boolean = record_type == "A" && name.exists(_.endsWith("." + company))
+  def isEligibleForRemove = record_type == "A" && name.exists(_.endsWith(DigitalOceanClusterSetup.nodeSuffix))
 }
 
 case class DomainRecordList(status: String, records: List[DomainRecord])

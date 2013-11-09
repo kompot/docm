@@ -4,10 +4,9 @@ digitalOcean {
 }
 // second level domain mandatory, must start with dot
 baseDomain: .yotasks.ru
-// third level domain, optional, must start with dot
-// WARNING: if you do not set 3rd level domain then destroy
-// operation will remove all droplets whose name ends in ${baseDomain}
-// thirdLevelDomain: .dev
+// node name suffix, mandatory
+// if starts with a dot acts like a 3rd level domain
+nodeSuffix: .dev
 image: Ubuntu 13.10 x32
 region: ams1
 memory: 512
