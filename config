@@ -1,22 +1,23 @@
-digitalOcean:
+digitalOcean {
     clientId: ClientIdFromDigitalOceanControlPanel
     apiKey: ApiKeyFromThereAsWell
-baseDomain: example.org
-nodeNameSuffix: sub
-os: Ubuntu 13.10 x32
-datacenter: Amsterdam 1
-memory: 512MB
-nodes
-  1:
-    roles: balancer, front, saltmaster
-  2:
-    roles: front
-  3:
-    roles: db
-    os: Ubuntu 13.10 x64
-  4:
-    roles: db
-    os: Ubuntu 13.10 x64
-  5:
-    roles: db
-    os: Ubuntu 13.10 x64
+}
+baseDomain: taskmanager.biz.tm
+nodeNameSuffix: dev
+image: Ubuntu 13.10 x32
+region: ams1
+memory: 512
+nodes {
+  1.roles: [balancer, front, saltmaster]
+
+  2.roles: front
+
+  3.roles: db
+  3.image: Ubuntu 13.10 x64
+
+  4.roles: db
+  4.image: Ubuntu 13.10 x64
+
+  5.roles: db
+  5.image: Ubuntu 13.10 x64
+}

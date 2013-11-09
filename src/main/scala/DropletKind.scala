@@ -1,9 +1,11 @@
+@deprecated
 sealed trait DropletKind {
   val kind: String
   val count: Int
   def isSaltMaster(n: Int) = false
   override def toString = kind
 }
+@deprecated
 object DropletKind {
   val kinds = List(Front, Db)
   val totalCount = kinds.map(_.count).sum
