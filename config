@@ -1,23 +1,28 @@
 digitalOcean {
-    clientId: ClientIdFromDigitalOceanControlPanel
-    apiKey: ApiKeyFromThereAsWell
+  clientId: ClientIdFromDigitalOceanControlPanel
+  apiKey: ApiKeyFromThereAsWell
 }
-baseDomain: taskmanager.biz.tm
-nodeNameSuffix: dev
+// second level domain mandatory, must start with dot
+baseDomain: .yotasks.ru
+// third level domain, optional, must start with dot
+// WARNING: if you do not set 3rd level domain then destroy
+// operation will remove all droplets whose name ends in ${baseDomain}
+// thirdLevelDomain: .dev
 image: Ubuntu 13.10 x32
 region: ams1
 memory: 512
-nodes {
-  1.roles: [balancer, front, saltmaster]
+// will add all matched (containing substring) key names to all nodes
+sshKeys: ["Fedchenko", "Brusenskiy"]
+nodes: [
+  { name: 1, roles: [balancer, front, saltmaster] },
+  { name: 2, roles: [front] }
 
-  2.roles: front
+#  3.roles: db
+#  3.image: Ubuntu 13.10 x64
 
-  3.roles: db
-  3.image: Ubuntu 13.10 x64
+#  4.roles: db
+#  4.image: Ubuntu 13.10 x64
 
-  4.roles: db
-  4.image: Ubuntu 13.10 x64
-
-  5.roles: db
-  5.image: Ubuntu 13.10 x64
-}
+#  5.roles: db
+#  5.image: Ubuntu 13.10 x64
+]

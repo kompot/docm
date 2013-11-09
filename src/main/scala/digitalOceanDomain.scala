@@ -1,6 +1,8 @@
+case class Node(name: String, roles: List[String])
+
 case class Droplet(id: Int, name: String, image_id: Int, size_id: Int, region_id: Int, backups_active: Boolean,
                    ip_address: Option[String], locked: Boolean, status: String) {
-  val currentSite = name.endsWith(s".${DigitalOceanClusterSetup.company}.${DigitalOceanClusterSetup.baseDomain}")
+  val currentSite = name.endsWith(s"${DigitalOceanClusterSetup.thirdLevelDomain}${DigitalOceanClusterSetup.baseDomain}")
   // ip check can be probably skipped
   val isUpAndHasIp = status.toLowerCase == "active" && ip_address.isDefined
 }

@@ -1,12 +1,6 @@
 import com.typesafe.config.ConfigFactory
-import org.joda.time.DateTime
-import play.api.libs.json.JsArray
-import play.api.libs.json.JsString
-import scala.concurrent.{TimeoutException, Await, Future, ExecutionContext}
-import scala.concurrent.duration._
-import scala.sys.process._
-import ExecutionContext.Implicits.global
-import play.api.libs.json._
+import scala.collection.JavaConversions._
+import scala.util.Try
 
 object DigitalOceanClusterSetup extends App {
   val options = Map(
@@ -15,19 +9,24 @@ object DigitalOceanClusterSetup extends App {
   )
 
   val cnf = ConfigFactory.parseFile(new java.io.File("config"))
-  // TODO check for mandatory keys in config
-  val baseDomain = cnf.getString("baseDomain")
-  val company = cnf.getString("nodeNameSuffix")
-  val defaultMemory = cnf.getInt("memory")
-  val defaultImage = cnf.getString("image")
-  val defaultRegion = cnf.getString("region")
+  val baseDomain =       cnf.getString("baseDomain")
+  val thirdLevelDomain = Try(cnf.getString("thirdLevelDomain")).getOrElse("")
+  val defaultMemory =    cnf.getInt("memory")
+  val defaultImage =     cnf.getString("image")
+  val defaultRegion =    cnf.getString("region")
+  val defaultSshKeys =   cnf.getStringList("sshKeys")
 
   val api = new DigitalOceanApi(cnf.getString("digitalOcean.clientId"), cnf.getString("digitalOcean.apiKey"))
+
+  val nodeList = cnf.getObjectList("nodes").toList.zipWithIndex.map { node =>
+    val nodeConfig = cnf.getList("nodes").get(node._2).atKey("node")
+    Node(nodeConfig.getString("node.name"), nodeConfig.getStringList("node.roles").toList)
+  }
 
   if (args.contains("help")) {
     options.map { kv =>
       println(kv._1)
-      println("    " + kv._2)
+      println("  " + kv._2)
     }
   } else if (!args.isEmpty) {
     if (args.contains("destroyOnly"))
@@ -38,10 +37,10 @@ object DigitalOceanClusterSetup extends App {
     println("""---------------------------------------------""")
     destroyDroplets()
     while (!api.droplets.exists(_.droplets.filter(_.currentSite).isEmpty)) {
-      Log.print("Not all " + DropletKind.totalCount + " droplets are destroyed. Sleep for 10 seconds.")
+      Log.print("Not all droplets that belong to current site destroyed. Sleep for 10 seconds.")
       Thread.sleep(10000)
     }
-    createDroplets()
+    createDroplets(nodeList)
 
 
 
@@ -175,40 +174,32 @@ object DigitalOceanClusterSetup extends App {
     })
   }
 
-  def createDroplets() {
+  def createDroplets(nodes: List[Node]) {
     val sizeId   = api.sizes.flatMap(_.sizes.find(_.memory == defaultMemory).map(_.id))
     val imageId  = api.images.flatMap(_.images.find(_.name == defaultImage).map(_.id))
     val regionId = api.regions.flatMap(_.regions.find(_.slug == defaultRegion).map(_.id))
-
-    // TODO add keys
-    //    val keys = Json.parse(api.getSshKeys)
-    //    val brooKey = getSshKeyIdByName(keys, "brusen")
-    //    println("broo key id" + brooKey)
-    //    val kompotKey = getSshKeyIdByName(keys, "fedchenk")
-    //    println("kompot key id" + kompotKey)
+    val keyIds   = api.sshKeys.map(_.ssh_keys.filter(key => defaultSshKeys.exists(key.name.contains)))
+      .getOrElse(List()).map(_.id)
     (sizeId, imageId, regionId) match {
       case (None, _, _) => Log.err(s"Droplet memory size set in config ($defaultMemory) can't be found.")
       case (_, None, _) => Log.err(s"Image name set in config ($defaultImage) can't be found.")
       case (_, _, None) => Log.err(s"Region name set in config ($defaultRegion) can't be found.")
-      case _            =>
-        DropletKind.kinds.map { kind =>
-          (1 to kind.count).map { n =>
-            val name = getDropletName(kind, n)
-            val res = api.createDroplet(name, sizeId.get, imageId.get, regionId.get, List())
-            Log.print(s"Started creating droplet of $name with. Result is " + res + ".")
-          }
-        }
+      case _            => nodes.map { n =>
+        val name = getDropletName(n)
+        val res = api.createDroplet(name, sizeId.get, imageId.get, regionId.get, keyIds)
+        Log.print(s"Started creating droplet of $name with. Result is " + res + ".")
+      }
     }
 
-    while (!allDropletsIsUpAndHasIp) {
-      Log.print("Not all " + DropletKind.totalCount + " droplets are up. Sleep for 10 seconds.")
+    while (!allDropletsAreUpAndHasIp) {
+      Log.print("Not all " + nodeList.length + " droplets are up. Sleep for 10 seconds.")
       Thread.sleep(10000)
     }
 
-    def allDropletsIsUpAndHasIp =
-      api.droplets.map(_.droplets.filter(_.currentSite).count(_.isUpAndHasIp)).exists(_ == DropletKind.totalCount)
+    def allDropletsAreUpAndHasIp =
+      api.droplets.map(_.droplets.filter(_.currentSite).count(_.isUpAndHasIp)).exists(_ == nodeList.length)
 
-    def getDropletName(kind: DropletKind, num: Int) = getDropletNameShort(kind, num) + "." + baseDomain
-    def getDropletNameShort(kind: DropletKind, num: Int) = s"${kind.kind}$num.$company"
+    def getDropletName(node: Node) = getDropletNameShort(node) + baseDomain
+    def getDropletNameShort(node: Node) = "node-" + node.name + thirdLevelDomain
   }
 }
