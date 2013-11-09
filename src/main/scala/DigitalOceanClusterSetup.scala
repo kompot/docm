@@ -9,6 +9,11 @@ import ExecutionContext.Implicits.global
 import play.api.libs.json._
 
 object DigitalOceanClusterSetup extends App {
+  val options = Map(
+    "destroyOnly" -> "Will only remove existing droplets, DNS records and exit.",
+    "help" -> "This message"
+  )
+
   val cnf = ConfigFactory.parseFile(new java.io.File("config"))
   // TODO check for mandatory keys in config
   val baseDomain = cnf.getString("baseDomain")
@@ -18,65 +23,26 @@ object DigitalOceanClusterSetup extends App {
   val defaultRegion = cnf.getString("region")
 
   val api = new DigitalOceanApi(cnf.getString("digitalOcean.clientId"), cnf.getString("digitalOcean.apiKey"))
-  Log.print(api.droplets.map(_.droplets.map(_.name)).mkString(", "))
 
-  def getDropletName(kind: DropletKind, num: Int) = getDropletNameShort(kind, num) + "." + baseDomain
-  def getDropletNameShort(kind: DropletKind, num: Int) = s"${kind.kind}$num.$company"
-
-
-
-
-
-  def destroyDroplets() = {
-    Log.print("Starting to destroy all related droplets.")
-    api.droplets.map(_.droplets.filter(_.currentSite).map { dropletToDestroy =>
-      val res = api.destroyDroplet(dropletToDestroy.id)
-      Log.print("Started destroying " + dropletToDestroy.name + ". Result is " + res + ".")
-    })
-  }
-  destroyDroplets()
-
-  while (!api.droplets.exists(_.droplets.filter(_.currentSite).isEmpty)) {
-    Log.print("Not all " + DropletKind.totalCount + " droplets are destroyed. Sleep for 10 seconds.")
-    Thread.sleep(10000)
-  }
-
-
-
-  def createDroplets() {
-    val sizeId   = api.sizes.flatMap(_.sizes.find(_.memory == defaultMemory).map(_.id))
-    val imageId  = api.images.flatMap(_.images.find(_.name == defaultImage).map(_.id))
-    val regionId = api.regions.flatMap(_.regions.find(_.slug == defaultRegion).map(_.id))
-
-    // TODO add keys
-    //    val keys = Json.parse(api.getSshKeys)
-    //    val brooKey = getSshKeyIdByName(keys, "brusen")
-    //    println("broo key id" + brooKey)
-    //    val kompotKey = getSshKeyIdByName(keys, "fedchenk")
-    //    println("kompot key id" + kompotKey)
-    (sizeId, imageId, regionId) match {
-      case (None, _, _) => Log.err(s"Droplet memory size set in config ($defaultMemory) can't be found.")
-      case (_, None, _) => Log.err(s"Image name set in config ($defaultImage) can't be found.")
-      case (_, _, None) => Log.err(s"Region name set in config ($defaultRegion) can't be found.")
-      case _            =>
-        DropletKind.kinds.map { kind =>
-          (1 to kind.count).map { n =>
-            val name = getDropletName(kind, n)
-            val res = api.createDroplet(name, sizeId.get, imageId.get, regionId.get, List())
-            Log.print(s"Started creating droplet of $name with. Result is " + res + ".")
-          }
-        }
+  if (args.contains("help")) {
+    options.map { kv =>
+      println(kv._1)
+      println("    " + kv._2)
     }
-  }
-  createDroplets()
+  } else if (!args.isEmpty) {
+    if (args.contains("destroyOnly"))
+      destroyDroplets()
+  } else {
+    println("""---------------------------------------------""")
+    println("""Run `sbt "run help"` to see available options""")
+    println("""---------------------------------------------""")
+    destroyDroplets()
+    while (!api.droplets.exists(_.droplets.filter(_.currentSite).isEmpty)) {
+      Log.print("Not all " + DropletKind.totalCount + " droplets are destroyed. Sleep for 10 seconds.")
+      Thread.sleep(10000)
+    }
+    createDroplets()
 
-  while (!allDropletsIsUpAndHasIp) {
-    Log.print("Not all " + DropletKind.totalCount + " droplets are up. Sleep for 10 seconds.")
-    Thread.sleep(10000)
-  }
-
-  def allDropletsIsUpAndHasIp =
-    api.droplets.map(_.droplets.filter(_.currentSite).count(_.isUpAndHasIp)).exists(_ == DropletKind.totalCount)
 
 
 
@@ -195,19 +161,54 @@ object DigitalOceanClusterSetup extends App {
 //
 //
 //
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
 //  (sshDefault ++ Seq(s"root@$saltMasterIp", "salt 'front*' pkg.install nginx")).!
 //  (sshDefault ++ Seq(s"root@$saltMasterIp", "salt 'front*' service.start nginx")).!
 //
 
+  }
 
+  def destroyDroplets() = {
+    Log.print("Starting to destroy all related droplets.")
+    api.droplets.map(_.droplets.filter(_.currentSite).map { dropletToDestroy =>
+      val res = api.destroyDroplet(dropletToDestroy.id)
+      Log.print("Started destroying " + dropletToDestroy.name + ". Result is " + res + ".")
+    })
+  }
+
+  def createDroplets() {
+    val sizeId   = api.sizes.flatMap(_.sizes.find(_.memory == defaultMemory).map(_.id))
+    val imageId  = api.images.flatMap(_.images.find(_.name == defaultImage).map(_.id))
+    val regionId = api.regions.flatMap(_.regions.find(_.slug == defaultRegion).map(_.id))
+
+    // TODO add keys
+    //    val keys = Json.parse(api.getSshKeys)
+    //    val brooKey = getSshKeyIdByName(keys, "brusen")
+    //    println("broo key id" + brooKey)
+    //    val kompotKey = getSshKeyIdByName(keys, "fedchenk")
+    //    println("kompot key id" + kompotKey)
+    (sizeId, imageId, regionId) match {
+      case (None, _, _) => Log.err(s"Droplet memory size set in config ($defaultMemory) can't be found.")
+      case (_, None, _) => Log.err(s"Image name set in config ($defaultImage) can't be found.")
+      case (_, _, None) => Log.err(s"Region name set in config ($defaultRegion) can't be found.")
+      case _            =>
+        DropletKind.kinds.map { kind =>
+          (1 to kind.count).map { n =>
+            val name = getDropletName(kind, n)
+            val res = api.createDroplet(name, sizeId.get, imageId.get, regionId.get, List())
+            Log.print(s"Started creating droplet of $name with. Result is " + res + ".")
+          }
+        }
+    }
+
+    while (!allDropletsIsUpAndHasIp) {
+      Log.print("Not all " + DropletKind.totalCount + " droplets are up. Sleep for 10 seconds.")
+      Thread.sleep(10000)
+    }
+
+    def allDropletsIsUpAndHasIp =
+      api.droplets.map(_.droplets.filter(_.currentSite).count(_.isUpAndHasIp)).exists(_ == DropletKind.totalCount)
+
+    def getDropletName(kind: DropletKind, num: Int) = getDropletNameShort(kind, num) + "." + baseDomain
+    def getDropletNameShort(kind: DropletKind, num: Int) = s"${kind.kind}$num.$company"
+  }
 }
