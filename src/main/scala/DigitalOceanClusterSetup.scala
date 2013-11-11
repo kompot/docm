@@ -132,10 +132,10 @@ object DigitalOceanClusterSetup extends App {
             Ssh("root", ip, "apt-get update")
 
             if (node.isSaltMaster) {
-              Log.print("Will install Salt master to " + node.dropletName)
-              Ssh("root", ip, "apt-get --assume-yes  install salt-master")
+              Log.print("Install Salt master to " + node.dropletName)
+              Ssh("root", ip, "apt-get --assume-yes install salt-master")
             }
-            Ssh("root", ip, "apt-get --assume-yes  install salt-minion")
+            Ssh("root", ip, "apt-get --assume-yes install salt-minion")
             Ssh("root", ip, s"echo 'master: $saltMasterIp' > /etc/salt/minion.d/master.conf")
             Ssh("root", ip, "service salt-minion restart")
           }
