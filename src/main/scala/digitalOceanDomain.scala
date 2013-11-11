@@ -1,4 +1,8 @@
-case class Node(name: String, roles: List[String])
+case class Node(name: String, roles: List[String]) {
+  def dropletName = dropletNameShort + DigitalOceanClusterSetup.baseDomain
+  def dropletNameShort = "node-" + name + DigitalOceanClusterSetup.nodeSuffix
+  def isSaltMaster = roles.contains("saltmaster")
+}
 
 case class Droplet(id: Int, name: String, image_id: Int, size_id: Int, region_id: Int, backups_active: Boolean,
                    ip_address: Option[String], locked: Boolean, status: String) {
@@ -7,7 +11,9 @@ case class Droplet(id: Int, name: String, image_id: Int, size_id: Int, region_id
   val isUpAndHasIp = status.toLowerCase == "active" && ip_address.isDefined
 }
 
-case class DropletList(status: String, droplets: List[Droplet])
+case class DropletList(status: String, droplets: List[Droplet]) {
+  val dropletsCurrentSite = droplets.filter(_.currentSite)
+}
 
 case class Domain(id: Int, name: String)
 
