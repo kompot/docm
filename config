@@ -13,8 +13,8 @@ memory: 512
 // will add all matched (containing substring) key names to all nodes
 sshKeys: ["Fedchenko", "Brusenskiy"]
 nodes: [
-  { name: 1, roles: [balancer, front, saltmaster] },
-  { name: 2, roles: [front] }
+  { name: 1, roles: [common, front, balancer, saltmaster] }
+  { name: 2, roles: [common, front] }
 
 #  3.roles: db
 #  3.image: Ubuntu 13.10 x64

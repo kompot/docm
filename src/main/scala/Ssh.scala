@@ -1,14 +1,18 @@
 import scala.sys.process._
+import scala.util.Try
 
 object Ssh {
   // prevent SSH from asking questions
-  val sshDefault = Seq("ssh",
+  val sshOptions = Seq(
     "-o", "UserKnownHostsFile=/dev/null",
     "-o", "StrictHostKeyChecking=no",
-    "-o", "CheckHostIP=no")
+    "-o", "CheckHostIP=no"
+  )
+
+  val sshDefault = Seq("ssh") ++ sshOptions
 
   def ping(user: String, ip: String) = {
-    val res = (sshDefault ++ Seq(s"$user@$ip", "ifconfig")).!!.contains(ip)
+    val res = Try((sshDefault ++ Seq(s"$user@$ip", "ifconfig")).!!.contains(ip)).getOrElse(false)
     Log.print("Ping " + ip + ". Result is " + res + ".")
     res
   }

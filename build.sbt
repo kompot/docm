@@ -1,6 +1,6 @@
 name := "docm"
 
-version := "SNAPSHOT"
+version := "0.0.1"
 
 libraryDependencies ++= Seq(
   "com.typesafe.play" %% "play" % "2.2.1",

@@ -14,3 +14,6 @@ project/project/
 .scala_dependencies
 .idea
 .idea_modules
+
+pillar/balancer.sls
+salt/docm-play-example-1.0-SNAPSHOT.deb

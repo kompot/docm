@@ -76,7 +76,7 @@ class DigitalOceanApi(clientId: String, apiKey: String) extends JsonHelpers {
 
   private def getOrNone[A](res: String)(implicit formatter: Format[A]): Option[A] = {
     parseResponse[A](res).map { r => Some(r) }.recoverTotal { r =>
-      Log.err(res)
+      Log.err("Error parsing API response to case classes " + res)
       None
     }
   }
