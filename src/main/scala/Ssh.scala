@@ -4,6 +4,7 @@ import scala.util.Try
 object Ssh {
   // prevent SSH from asking questions
   val sshOptions = Seq(
+    "-q",
     "-o", "UserKnownHostsFile=/dev/null",
     "-o", "StrictHostKeyChecking=no",
     "-o", "CheckHostIP=no"

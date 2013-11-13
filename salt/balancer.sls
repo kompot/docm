@@ -7,6 +7,7 @@ nginx:
     - enable: true
     - watch:
       - file: /etc/nginx/nginx.conf
+      - file: {{ pillar['nginx_vhost_dir'] }}/docm-example.conf
 
 /etc/nginx/nginx.conf:
   file.managed:

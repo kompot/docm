@@ -7,30 +7,28 @@ Given following [HOCON](https://github.com/typesafehub/config) config
 
 ```
 digitalOcean {
-    clientId: ClientIdFromDigitalOceanControlPanel
-    apiKey: ApiKeyFromThereAsWell
+  clientId: ClientIdFromDigitalOceanControlPanel
+  apiKey: ApiKeyFromThereAsWell
 }
-baseDomain: taskmanager.biz.tm
-nodeNameSuffix: dev
-image: Ubuntu 13.10 x32
+// second level domain mandatory, must start with dot
+baseDomain: .example.org
+// node name suffix, mandatory
+// if starts with a dot acts like a 3rd level domain
+nodeSuffix: .dev
+image: Ubuntu 12.04 x64
 region: ams1
 memory: 512
-nodes {
-  1.roles: [balancer, front, saltmaster]
-
-  2.roles: front
-
-  3.roles: db
-  3.image: Ubuntu 13.10 x64
-
-  4.roles: db
-  4.image: Ubuntu 13.10 x64
-
-  5.roles: db
-  5.image: Ubuntu 13.10 x64
-}
+// will add all matched (containing substring) key names to all nodes
+sshKeys: ["key name 1", "key name 2"]
+nodes: [
+  { name: 1, roles: [common, front, balancer, saltmaster] }
+  { name: 2, roles: [common, front] }
+  { name: 3, roles: [common, db] }
+  { name: 4, roles: [common, db] }
+  { name: 5, roles: [common, db] }
+]
 ```
 
-It will set up 5 instances, install Salt master to first one and use to install required software to other nodes.
+It will set up 5 instances, install Salt master to first one and use it to install required software to other nodes.
 
-If all goes OK — your site will be up and running at www.sub.example.org.
+If all goes OK — your site will be up and running at www.dev.example.org.

@@ -1,0 +1,2 @@
+repl_set: rs0
+db_hosts: ["this is gets replaced", "by list of", "Mongo nodes"]

@@ -41,8 +41,8 @@ object DigitalOceanClusterSetup extends App {
       createDroplets(nodes)
       removeOldDnsEntries()
       addNewDnsEntries()
-      installSalt()
       preProcessSaltPillars()
+      installSalt()
       copySaltStatesToMasterAndApply()
     }
   }
@@ -72,7 +72,7 @@ object DigitalOceanClusterSetup extends App {
       case (_, None, _) => Log.err(s"Image name set in config ($defaultImage) can't be found.")
       case (_, _, None) => Log.err(s"Region name set in config ($defaultRegion) can't be found.")
       case _            => nodes.map { n =>
-        val name = n.dropletName
+        val name = n.hostName
         val res = api.createDroplet(name, sizeId.get, imageId.get, regionId.get, keyIds)
         Log.print(s"Started creating droplet of $name with. Result is " + res + ".")
       }
@@ -109,7 +109,7 @@ object DigitalOceanClusterSetup extends App {
       nodes.map { node =>
         val dnsName = node.dropletNameShort
         Log.print("Will add domain record for " + dnsName)
-        droplets.find(_.name == node.dropletName).map { droplet =>
+        droplets.find(_.name == node.hostName).map { droplet =>
           api.createDomainRecord(domain.id, "A", droplet.ip_address.get, dnsName)
         }.orElse {
           Log.print("No droplet found for this domain name. Doing nothing.")
@@ -123,10 +123,10 @@ object DigitalOceanClusterSetup extends App {
     val droplets = api.droplets
 
     droplets.flatMap(_.dropletsCurrentSite(nodes).find(_.name == nodes.find(_.isSaltMaster)
-        .map(_.dropletName).getOrElse(""))).flatMap(_.ip_address).map { saltMasterIp =>
+        .map(_.hostName).getOrElse(""))).flatMap(_.ip_address).map { saltMasterIp =>
       Log.print("Salt master IP is " + saltMasterIp)
       nodes.par.map { node =>
-        droplets.flatMap(_.dropletsCurrentSite(nodes).find(_.name == node.dropletName)).map { droplet =>
+        droplets.flatMap(_.dropletsCurrentSite(nodes).find(_.name == node.hostName)).map { droplet =>
           Log.print("Set up Salt on " + droplet.name)
           droplet.ip_address.map { ip =>
             Ssh("root", ip, "apt-get --assume-yes install python-software-properties")
@@ -134,11 +134,16 @@ object DigitalOceanClusterSetup extends App {
             Ssh("root", ip, "apt-get update")
 
             if (node.isSaltMaster) {
-              Log.print("Install Salt master to " + node.dropletName)
+              Log.print("Install Salt master to " + node.hostName)
               Ssh("root", ip, "apt-get --assume-yes install salt-master")
             }
             Ssh("root", ip, "apt-get --assume-yes install salt-minion")
+            val hosts = scala.io.Source.fromFile("salt/etc/hosts").getLines().mkString("\n")
+            // put hosts file to a new host so that it's able to immediately resolve other nodes
+            // in cluster despite of DNS updates
+            Ssh("root", ip, s"echo '$hosts' > /etc/hosts")
             Ssh("root", ip, s"echo 'master: $saltMasterIp' > /etc/salt/minion.d/master.conf")
+            Ssh("root", ip, s"echo '${node.hostName}' > /etc/salt/minion_id")
             Ssh("root", ip, "service salt-minion restart")
           }
         }
@@ -149,15 +154,16 @@ object DigitalOceanClusterSetup extends App {
         Thread.sleep(10000)
         tryToAcceptEveryKey
       }
+      println("All keys are accepted by Salt master.")
 
       def tryToAcceptEveryKey = nodes.map { node =>
-        Ssh("root", saltMasterIp, "salt-key -y -a " + node.dropletName)
+        Ssh("root", saltMasterIp, "salt-key -y -a " + node.hostName)
       }
 
       def allSaltMinionKeysAreAccepted: Boolean = {
         val allAcceptedKeys = Ssh("root", saltMasterIp, "salt-key --list=accepted")
         !nodes.map { node =>
-          allAcceptedKeys.contains(node.dropletName)
+          allAcceptedKeys.contains(node.hostName)
         }.contains(false)
       }
     } getOrElse {
@@ -168,6 +174,9 @@ object DigitalOceanClusterSetup extends App {
   private def preProcessSaltPillars() {
     val droplets = api.droplets
     val frontServerIPs = droplets.map(_.dropletsCurrentSite(nodes)).map(_.filter(_.roles.exists(_.contains("front"))).map(_.ip_address.get)).getOrElse(List())
+    val dbServerHosts  = droplets.map(_.dropletsCurrentSite(nodes)).map(_.filter(_.roles.exists(_.contains("db"))).map(_.name)).getOrElse(List())
+    val allServers = droplets.map(_.dropletsCurrentSite(nodes)).getOrElse(List())
+    // process balancer template
     val balancerPillar = scala.io.Source.fromFile("pillar/balancer.template").getLines().map { line =>
       if (line.startsWith("front_ips")) {
         // TODO hard-coded play port
@@ -177,17 +186,33 @@ object DigitalOceanClusterSetup extends App {
       }
     }
     printToFile(new java.io.File("pillar/balancer.sls"))(pw => { balancerPillar.foreach(pw.println) })
-    println(balancerPillar.toList)
+    // process db template
+    val dbPillar = scala.io.Source.fromFile("pillar/db.template").getLines().map { line =>
+      if (line.startsWith("db_hosts")) {
+        // TODO hard-coded play port
+        "db_hosts: " + dbServerHosts.mkString("['", "', '", "']")
+      } else {
+        line
+      }
+    }
+    printToFile(new java.io.File("pillar/db.sls"))(pw => { dbPillar.foreach(pw.println) })
+    // process hosts file
+    val etcHostsPillar = scala.io.Source.fromFile("salt/etc/hosts.template").getLines().mkString("\n")
+    printToFile(new java.io.File("salt/etc/hosts"))(pw => {
+      pw.println(etcHostsPillar)
+      allServers.map(s => s.ip_address.get + " " + s.name).foreach(pw.println)
+    })
+
   }
 
   private def copySaltStatesToMasterAndApply() {
     import scala.sys.process._
 
     api.droplets.flatMap(_.dropletsCurrentSite(nodes).find(_.name == nodes.find(_.isSaltMaster)
-        .map(_.dropletName).getOrElse(""))).flatMap(_.ip_address).map { saltMasterIp =>
+        .map(_.hostName).getOrElse(""))).flatMap(_.ip_address).map { saltMasterIp =>
       Log.print("Copy Salt states to master")
-      Seq("scp", "-r", "pillar", s"root@$saltMasterIp:/srv").!!
-      Seq("scp", "-r", "salt", s"root@$saltMasterIp:/srv").!!
+      Seq("rsync", "-e", Ssh.sshDefault.mkString(" "), "-r", "pillar/", s"root@$saltMasterIp:/srv/pillar").!!
+      Seq("rsync", "-e", Ssh.sshDefault.mkString(" "), "-r", "salt/", s"root@$saltMasterIp:/srv/salt").!!
       // TODO remove this and salt/_modules/apt.py when 0.17.2 arrives
       // fix for https://github.com/saltstack/salt/issues/8015
       Ssh("root", saltMasterIp, "salt '*' saltutil.sync_modules")
@@ -195,8 +220,8 @@ object DigitalOceanClusterSetup extends App {
       nodes.par.map { node =>
         node.saltStates.map { role =>
           Log.print("Will perform this command on salt master")
-          Log.print(s"salt '${node.dropletName}' state.sls $role")
-          Log.print(Ssh("root", saltMasterIp, s"salt '${node.dropletName}' state.sls $role"))
+          Log.print(s"salt '${node.hostName}' state.sls $role")
+          Log.print(Ssh("root", saltMasterIp, s"salt '${node.hostName}' state.sls $role"))
         }
       }
     }

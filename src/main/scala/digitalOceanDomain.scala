@@ -1,5 +1,5 @@
 case class Node(name: String, roles: List[String]) {
-  def dropletName = dropletNameShort + DigitalOceanClusterSetup.baseDomain
+  def hostName = dropletNameShort + DigitalOceanClusterSetup.baseDomain
   def dropletNameShort = "node-" + name + DigitalOceanClusterSetup.nodeSuffix
   def isSaltMaster = roles.contains("saltmaster")
   def saltStates = roles.filterNot(_ == "saltmaster")
@@ -14,7 +14,7 @@ case class Droplet(id: Int, name: String, image_id: Int, size_id: Int, region_id
 
 case class DropletList(status: String, droplets: List[Droplet]) {
   def dropletsCurrentSite(nodes: List[Node]): List[Droplet] = droplets.filter(_.currentSite).map { droplet =>
-    droplet.copy(roles = nodes.find(_.dropletName == droplet.name).map(_.roles))
+    droplet.copy(roles = nodes.find(_.hostName == droplet.name).map(_.roles))
   }
 }
 

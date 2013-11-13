@@ -3,25 +3,19 @@ digitalOcean {
   apiKey: ApiKeyFromThereAsWell
 }
 // second level domain mandatory, must start with dot
-baseDomain: .yotasks.ru
+baseDomain: .example.org
 // node name suffix, mandatory
 // if starts with a dot acts like a 3rd level domain
 nodeSuffix: .dev
-image: Ubuntu 13.10 x32
+image: Ubuntu 12.04 x64
 region: ams1
 memory: 512
 // will add all matched (containing substring) key names to all nodes
-sshKeys: ["Fedchenko", "Brusenskiy"]
+sshKeys: ["key name 1", "key name 2"]
 nodes: [
   { name: 1, roles: [common, front, balancer, saltmaster] }
   { name: 2, roles: [common, front] }
-
-#  3.roles: db
-#  3.image: Ubuntu 13.10 x64
-
-#  4.roles: db
-#  4.image: Ubuntu 13.10 x64
-
-#  5.roles: db
-#  5.image: Ubuntu 13.10 x64
+  { name: 3, roles: [common, db] }
+  { name: 4, roles: [common, db] }
+  { name: 5, roles: [common, db] }
 ]

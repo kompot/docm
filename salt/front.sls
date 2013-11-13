@@ -5,7 +5,7 @@ openjdk-7-jre-headless:
 docm-play-example:
   pkg.installed:
     - sources:
-      - docm-play-example: salt://docm-play-example-1.0-SNAPSHOT.deb
+      - docm-play-example: salt://docm-play-example-0.0.1.deb
 
 /etc/init.d/play.docm:
   file.managed:
